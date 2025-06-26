@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}交通費入力{% endblock %}
+{% block content %}
+<h2>交通費入力フォーム（最大 5 区間まとめて登録）</h2>
+
+<form method="post" enctype="multipart/form-data">
+
+    <!-- ========== デスクトップ (md 以上) 用テーブル ========== -->
+    <table class="table table-bordered align-middle w-100">
+      <thead class="table-light thead-desktop">
+        <tr>
+          <th style="width:130px">日付</th>
+          <th>出発</th>
+          <th>到着</th>
+          <th style="width:115px">交通機関</th>
+          <th style="width:110px">金額 (円)</th>
+          <th>メモ</th>
+          <th style="width:160px">領収書</th>
+        </tr>
+      </thead>
+  
+      <tbody id="rows">
+        {% for i in range(5) %}
+          <!-- ===== デスクトップ行 ===== -->
+          <tr class="d-none d-md-table-row">
+            <td><input type="date"   name="date[]"        class="form-control form-control-lg"></td>
+            <td><input type="text"   name="departure[]"   class="form-control form-control-lg"></td>
+            <td><input type="text"   name="destination[]" class="form-control form-control-lg"></td>
+  
+            <td>
+              <select name="transport[]" class="form-select form-select-lg">
+                <option selected value="電車">電車</option>
+                <option value="バス">バス</option>
+                <option value="特急">特急</option>
+                <option value="新幹線">新幹線</option>
+                <option value="高速道路">高速道路</option>
+                <option value="自動車">自動車</option>
+                <option value="立替経費">立替経費</option>
+                <option value="その他">その他</option>
+              </select>
+            </td>
+  
+            <td><input type="number" name="amount[]"      class="form-control form-control-lg text-end" min="0"></td>
+            <td><input type="text"   name="memo[]"        class="form-control form-control-lg"></td>
+            <td>
+              <input type="file"
+                     name="receipt{{ i }}[]"
+                     class="form-control form-control-lg"
+                     accept="image/*,application/pdf"
+                     multiple>
+              <small class="text-muted">最大５枚選択可</small>
+              <small class="text-success file-info"></small>
+            </td>
+          </tr>
+  
+          <!-- ===== スマホ行（カード） ===== -->
+          <tr class="d-table-row d-md-none">
+            <td colspan="7" class="p-0">
+              <div class="card mt-3">
+                <div class="card-body p-3">
+  
+                  <div class="mb-2">
+                    <label class="form-label fw-bold mb-1">日付</label>
+                    <input type="date" name="date[]" class="form-control">
+                  </div>
+  
+                  <div class="row g-2 mb-2">
+                    <div class="col-6">
+                      <label class="form-label fw-bold mb-1">出発</label>
+                      <input type="text" name="departure[]" class="form-control">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label fw-bold mb-1">到着</label>
+                      <input type="text" name="destination[]" class="form-control">
+                    </div>
+                  </div>
+  
+                  <div class="mb-2">
+                    <label class="form-label fw-bold mb-1">交通機関</label>
+                    <select name="transport[]" class="form-select">
+                      <option selected value="電車">電車</option>
+                      <option value="バス">バス</option>
+                      <option value="特急">特急</option>
+                      <option value="新幹線">新幹線</option>
+                      <option value="高速道路">高速道路</option>
+                      <option value="自動車">自動車</option>
+                      <option value="立替経費">立替経費</option>
+                      <option value="その他">その他</option>
+                    </select>
+                  </div>
+  
+                  <div class="row g-2 mb-2">
+                    <div class="col-6">
+                      <label class="form-label fw-bold mb-1">金額 (円)</label>
+                      <input type="number" name="amount[]" class="form-control text-end">
+                    </div>
+                    <div class="col-6">
+                      <label class="form-label fw-bold mb-1">メモ</label>
+                      <input type="text" name="memo[]" class="form-control">
+                    </div>
+                  </div>
+  
+                  <div class="mb-2">
+                    <label class="form-label fw-bold mb-1">
+                      領収書 <small class="text-muted">(最大5枚)</small>
+                    </label>
+                    <input type="file"
+                           name="receipt{{ i }}[]"
+                           class="form-control"
+                           accept="image/*,application/pdf"
+                           multiple>
+                  </div>
+  
+                </div>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  
+    <!-- ========== テンプレート（追加行用） ========== -->
+    <template id="row-template">
+      <!-- デスクトップ -->
+      <tr class="d-none d-md-table-row">
+        <td><input type="date"   name="date[]"        class="form-control form-control-lg"></td>
+        <td><input type="text"   name="departure[]"   class="form-control form-control-lg"></td>
+        <td><input type="text"   name="destination[]" class="form-control form-control-lg"></td>
+        <td>
+          <select name="transport[]" class="form-select form-select-lg">
+            <option selected value="電車">電車</option>
+            <option value="バス">バス</option>
+            <option value="特急">特急</option>
+            <option value="新幹線">新幹線</option>
+            <option value="高速道路">高速道路</option>
+            <option value="自動車">自動車</option>
+            <option value="立替経費">立替経費</option>
+            <option value="その他">その他</option>
+          </select>
+        </td>
+        <td><input type="number" name="amount[]" class="form-control form-control-lg text-end" min="0"></td>
+        <td><input type="text"   name="memo[]"   class="form-control form-control-lg"></td>
+        <td>
+          <input type="file" name="receipt__IDX__[]" class="form-control form-control-lg"
+                 accept="image/*,application/pdf" multiple>
+          <small class="text-muted">最大５枚選択可</small>
+          <small class="text-success file-info"></small>
+        </td>
+      </tr>
+  
+      <!-- スマホ -->
+      <tr class="d-table-row d-md-none">
+        <td colspan="7" class="p-0">
+          <div class="card mt-3">
+            <div class="card-body p-3">
+              <div class="mb-2">
+                <label class="form-label fw-bold mb-1">日付</label>
+                <input type="date" name="date[]" class="form-control">
+              </div>
+              <div class="row g-2 mb-2">
+                <div class="col-6">
+                  <label class="form-label fw-bold mb-1">出発</label>
+                  <input type="text" name="departure[]" class="form-control">
+                </div>
+                <div class="col-6">
+                  <label class="form-label fw-bold mb-1">到着</label>
+                  <input type="text" name="destination[]" class="form-control">
+                </div>
+              </div>
+              <div class="mb-2">
+                <label class="form-label fw-bold mb-1">交通機関</label>
+                <select name="transport[]" class="form-select">
+                  <option selected value="電車">電車</option>
+                  <option value="バス">バス</option>
+                  <option value="特急">特急</option>
+                  <option value="新幹線">新幹線</option>
+                  <option value="高速道路">高速道路</option>
+                  <option value="自動車">自動車</option>
+                  <option value="立替経費">立替経費</option>
+                  <option value="その他">その他</option>
+                </select>
+              </div>
+              <div class="row g-2 mb-2">
+                <div class="col-6">
+                  <label class="form-label fw-bold mb-1">金額 (円)</label>
+                  <input type="number" name="amount[]" class="form-control text-end">
+                </div>
+                <div class="col-6">
+                  <label class="form-label fw-bold mb-1">メモ</label>
+                  <input type="text" name="memo[]" class="form-control">
+                </div>
+              </div>
+              <div class="mb-2">
+                <label class="form-label fw-bold mb-1">
+                  領収書 <small class="text-muted">(最大5枚)</small>
+                </label>
+                <input type="file" name="receipt__IDX__[]" class="form-control"
+                       accept="image/*,application/pdf" multiple>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    </template>
+  
+    <!-- 操作ボタン -->
+    <button type="button" id="add-row" class="btn btn-outline-primary w-100 mt-3">
+      ＋ 区間を追加
+    </button>
+  
+    <div class="mt-3 d-grid gap-2 d-md-flex">
+      <button class="btn btn-primary">登録</button>
+      <a href="{{ url_for('expenses.list_expenses') }}" class="btn btn-secondary">一覧へ</a>
+    </div>
+  </form>  
+<script src="{{ url_for('static', filename='js/form.js') }}"></script>
+{% endblock %}

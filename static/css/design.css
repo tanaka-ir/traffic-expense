@@ -1,0 +1,74 @@
+/* ====== Design Tokens ====== */
+:root {
+    --clr-primary: #2563eb;   /* indigo-600 */
+    --clr-primary-dark: #1e40af;
+    --clr-accent:  #22c55e;   /* green-500 */
+    --clr-danger:  #dc2626;   /* red-600 */
+    --font-sans:  'Inter', 'Noto Sans JP', sans-serif;
+  }
+  
+  /* ====== Global ====== */
+  body { font-family: var(--font-sans); line-height: 1.55; }
+  h1,h2,h3 { font-weight: 600; }
+  
+  /* ナビタブを太め・上寄せ */
+  .nav-tabs .nav-link { font-weight: 500; padding: .75rem 1.25rem; }
+  
+  /* テーブル行にホバー */
+  .table-hover tbody tr:hover { background: #f6fafe; }
+  
+  /* ステータスカラー */
+  .badge-pending  { background: #64748b; }      /* slate-500 */
+  .badge-approved { background: var(--clr-accent); }
+  .badge-rejected { background: var(--clr-danger); }
+  .badge-canceled { background: #dc6e26; }      /* orange-500 */
+  
+  /* 大きめフォーム */
+  .form-control-lg { font-size: 1rem; padding: .8rem .9rem; }
+  
+  /* 画面下固定 “新規入力” ボタン (モバイル) */
+  @media (max-width: 576px) {
+    .fab-submit {
+      position: fixed; bottom: 1.25rem; right: 1.25rem;
+      border-radius: 50%; width: 56px; height: 56px;
+      background: var(--clr-primary); color:#fff; font-size: 24px;
+      display: flex; align-items:center; justify-content: center;
+      box-shadow: 0 3px 10px rgba(0,0,0,.25);
+    }
+  }
+  
+  @media (max-width: 767.98px) {
+    /* カードの左右ぎりぎり感を軽減 */
+    .card { border-radius: .75rem; box-shadow: 0 0 6px rgba(0,0,0,.06); }
+    .card-body { padding: 1rem 1.25rem; }
+  
+    /* 入力フォントを 16px 以上に */
+    .form-control {
+      font-size: 1rem;        /* =16px */
+    }
+  }
+
+  /* ─── スマホでは非表示 ───────────────── */
+  .thead-desktop {
+    display: none !important;
+  }
+  
+  /* md (≥768px) から表示させる */
+  @media (min-width: 768px) {
+    .thead-desktop {
+      display: table-header-group !important;
+    }
+  }
+  
+  /* ===== 一覧テーブル：モバイルでは横スクロール & 折り返し禁止 ===== */
+  @media (max-width: 767.98px) {
+    .list-table th,
+    .list-table td {
+      white-space: nowrap;   /* 改行しない */
+    }
+  }
+  
+  
+  
+  
+  
