@@ -1,3 +1,16 @@
+# ─── 環境変数ファイル ───────────────────
 .env
-instance/service_account.json
-instance/service_account.json
+
+# ─── 機密ファイル／ローカル DB など ────
+instance/           # ←フォルダごと無視
+safe_files/         # ←今回追加
+
+# ─── Python が生成するキャッシュ類 ─────
+__pycache__/
+*.py[cod]
+
+# ─── 仮想環境 ─────────────────────────
+venv/
+
+# ─── macOS メタデータ ─────────────────
+.DS_Store
