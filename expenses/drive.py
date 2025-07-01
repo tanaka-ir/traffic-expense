@@ -52,8 +52,8 @@ def drive_upload(local_path: Union[str, Path], filename: str | None = None) -> s
     if filename is None:
         filename = local_path.name
 
-    # 1) HEIC → JPEG
-    if local_path.suffix.lower() == ".heic":
+    # 1) HEIC / HEIF → JPEG   ← ★ここを修正
+    if local_path.suffix.lower() in (".heic", ".heif"):
         local_path, filename = _convert_heic_to_jpg(local_path)
     else:
         # 2) そのほか画像も JPEG 化
