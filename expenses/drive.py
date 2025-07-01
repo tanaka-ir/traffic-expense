@@ -104,4 +104,4 @@ def drive_upload(local_path: Union[str, Path], filename: str | None = None) -> s
     ).execute()
 
     # 4) 直接表示 URL を返す
-    return f"https://drive.google.com/uc?export=view&id={file_id}"
+    return f"https://drive.google.com/uc?id={file_id}"
