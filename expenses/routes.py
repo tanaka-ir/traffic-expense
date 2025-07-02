@@ -78,7 +78,12 @@ def submit():
                 upload_dir.mkdir(parents=True, exist_ok=True)
                 save_to = upload_dir / filename
                 f.save(save_to)                         # ローカル保存
-                drive_link = drive_upload(save_to, filename)
+                drive_link = drive_upload(
+                    save_to,
+                    filename,
+                    folder_id=current_app.config["GDRIVE_UPLOAD_FOLDER_ID"],
+                    credentials_path=current_app.config["GDRIVE_SERVICE_JSON"],
+                )
 
                 receipt = ExpenseReceipt(
                     expense_id=expense.id,              # ← flush 済なので OK
