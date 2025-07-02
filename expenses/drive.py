@@ -1,101 +1,111 @@
-"""
-Google Drive へ領収書をアップロードし、
-誰でも閲覧可の “直接表示 URL” (uc?export=view…) を返すユーティリティ
+"""drive.py
+Google Drive 連携 + 画像変換ユーティリティ
+-------------------------------------------
+* iPhone の HEIC / HEIF を自動で PNG へ変換してアップロード
+* 変換・アップロードの流れを INFO ログで追跡出来るようにした
 """
 
 from __future__ import annotations
-import os, mimetypes
+
+import io
+import logging
+import os
+import sys
+from datetime import datetime
 from pathlib import Path
-from typing import Tuple, Union
+from typing import BinaryIO, Tuple
 
-from googleapiclient.discovery import build
-from googleapiclient.http      import MediaFileUpload
-from google.oauth2             import service_account
+import googleapiclient.discovery  # type: ignore
+from googleapiclient.http import MediaIoBaseUpload  # type: ignore
+from pillow_heif import register_heif_opener  # pip install pillow‑heif
+from PIL import Image, UnidentifiedImageError
 
-from PIL import Image, UnidentifiedImageError        # Pillow
-import pyheif                                         # HEIC/HEIF
+# ---------------------------------------------------------------------------
+# ロギング設定 --------------------------------------------------------------
+# ---------------------------------------------------------------------------
+logger = logging.getLogger(__name__)
 
-import logging                         #後からこの下の4行は消す
+if not logger.handlers:
+    # systemd-journal へ流れる stdout にハンドラを付ける
+    handler = logging.StreamHandler(sys.stdout)
+    fmt = "[%(asctime)s] %(levelname)s %(name)s: %(message)s"
+    handler.setFormatter(logging.Formatter(fmt))
+    logger.addHandler(handler)
 
-logger = logging.getLogger(__name__)   # ← 自分専用のロガーを取得
-logger.setLevel(logging.INFO)          # INFO 以上を出力
+logger.setLevel(logging.INFO)
+logger.info("drive.py is imported")
 
-logger.info("drive.py is imported")    # ← モジュール読み込み時に 1 回だけ出る
+# ---------------------------------------------------------------------------
+# 画像関連ユーティリティ ------------------------------------------------------
+# ---------------------------------------------------------------------------
+register_heif_opener()  # HEIF/HEIC を Pillow が開けるようにする
+
+ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".heif", ".heic"}
 
 
-DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_PARENT_ID", "xxxxxxxxxxxxxxxxxxxx")
+def _convert_to_png(src: BinaryIO, original_name: str) -> Tuple[io.BytesIO, str]:
+    """画像を Pillow で読み取り PNG に再保存して返す
 
-# ─────────────────────────────
-# Google Drive service
-# ─────────────────────────────
-def get_drive_service():
-    creds = service_account.Credentials.from_service_account_file(
-        os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON"),
-        scopes=["https://www.googleapis.com/auth/drive"],
-    )
-    return build("drive", "v3", credentials=creds, cache_discovery=False)
-
-# ─────────────────────────────
-# Pillow で開ける画像 → JPEG に統一
-# ─────────────────────────────
-def _ensure_jpeg(src: Union[str, Path]) -> Tuple[str, str]:
-    p = Path(src)
-    try:
-        with Image.open(p) as im:
-            if im.format != "JPEG":
-                dst = p.with_suffix(".jpg")
-                im.convert("RGB").save(dst, "JPEG", quality=90)
-                return str(dst), dst.name
-    except UnidentifiedImageError:
-        # Pillow で開けない（= 画像じゃない or HEIF など）
-        pass
-    return str(p), p.name
-
-# ─────────────────────────────
-# 拡張子を無視して「中身が HEIF」なら JPEG へ
-# ─────────────────────────────
-def _maybe_convert_heif(src: Union[str, Path]) -> Tuple[str, str]:
-    p = Path(src)
-    try:
-        heif = pyheif.read(p)
-    except ValueError:
-        # HEIF ではなかった
-        return str(p), p.name
-
-    img = Image.frombytes(
-        heif.mode, heif.size, heif.data, "raw", heif.mode, heif.stride
-    )
-    dst = p.with_suffix(".jpg")
-    img.save(dst, "JPEG", quality=90)
-    return str(dst), dst.name
-
-# ─────────────────────────────
-# メイン
-# ─────────────────────────────
-def drive_upload(local_path: Union[str, Path], filename: str | None = None) -> str:
+    Returns
+    -------
+    (png_buffer, new_filename)
     """
-    * まず Pillow で開けるなら JPEG へ
-    * 開けなかった場合でも HEIF なら JPEG へ
-    * Google Drive へアップロードして uc?export=view URL を返す
-    """
-    local_path_str, filename = _ensure_jpeg(local_path)
-    local_path_str, filename = _maybe_convert_heif(local_path_str)
+    try:
+        with Image.open(src) as im:
+            im = im.convert("RGB")  # α不要なら"
+            buf = io.BytesIO()
+            im.save(buf, format="PNG", optimize=True)
+            buf.seek(0)
+            new_name = f"{Path(original_name).stem}.png"
+            logger.info("Converted %s -> %s (size=%dB)", original_name, new_name, buf.getbuffer().nbytes)
+            return buf, new_name
+    except UnidentifiedImageError as e:
+        logger.exception("Image convert failed: %s", e)
+        raise
 
-    service = get_drive_service()
-    meta  = {"name": filename, "parents": [DRIVE_FOLDER_ID]}
-    mime  = mimetypes.guess_type(local_path_str)[0] or "application/octet-stream"
-    media = MediaFileUpload(local_path_str, mimetype="image/jpeg", resumable=True)
 
-    file = (
-        service.files()
-        .create(body=meta, media_body=media, fields="id")
-        .execute()
-    )
+# ---------------------------------------------------------------------------
+# Google Drive へのアップロード ---------------------------------------------
+# ---------------------------------------------------------------------------
+
+_SERVICE_CACHE: dict[str, "googleapiclient.discovery.Resource"] = {}
+
+
+def _get_service(credentials_path: str) -> "googleapiclient.discovery.Resource":
+    if credentials_path not in _SERVICE_CACHE:
+        from google.oauth2 import service_account  # type: ignore
+
+        scopes = ["https://www.googleapis.com/auth/drive.file"]
+        creds = service_account.Credentials.from_service_account_file(credentials_path, scopes=scopes)
+        _SERVICE_CACHE[credentials_path] = googleapiclient.discovery.build("drive", "v3", credentials=creds)
+    return _SERVICE_CACHE[credentials_path]
+
+
+def drive_upload(fp: BinaryIO, filename: str, *, folder_id: str, credentials_path: str) -> str:
+    """ファイルストリームを Google Drive にアップロードし共有リンク URL を返す"""
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_EXTS:
+        raise ValueError(f"Unsupported extension: {ext}")
+
+    # HEIF/HEIC → PNG に変換 ------------------------------
+    if ext in {".heif", ".heic"}:
+        fp, filename = _convert_to_png(fp, filename)
+
+    media = MediaIoBaseUpload(fp, mimetype="image/png", resumable=False)
+
+    metadata = {
+        "name": filename,
+        "parents": [folder_id],
+        "description": f"uploaded {datetime.now():%Y-%m-%d %H:%M:%S}"
+    }
+
+    service = _get_service(credentials_path)
+    file = service.files().create(body=metadata, media_body=media, fields="id, webViewLink").execute()
     file_id = file["id"]
 
-    service.permissions().create(
-        fileId=file_id,
-        body={"role": "reader", "type": "anyone"},
-    ).execute()
+    # 共有リンクを Anyone with the link readable に変更
+    service.permissions().create(fileId=file_id, body={"type": "anyone", "role": "reader"}).execute()
+    web_link: str = file["webViewLink"]
 
-    return f"https://drive.google.com/uc?export=view&id={file_id}"
+    logger.info("Uploaded %s to Drive id=%s", filename, file_id)
+    return web_link
