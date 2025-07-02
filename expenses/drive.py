@@ -15,6 +15,14 @@ from google.oauth2             import service_account
 from PIL import Image, UnidentifiedImageError        # Pillow
 import pyheif                                         # HEIC/HEIF
 
+import logging                         #後からこの下の4行は消す
+
+logger = logging.getLogger(__name__)   # ← 自分専用のロガーを取得
+logger.setLevel(logging.INFO)          # INFO 以上を出力
+
+logger.info("drive.py is imported")    # ← モジュール読み込み時に 1 回だけ出る
+
+
 DRIVE_FOLDER_ID = os.getenv("GOOGLE_DRIVE_PARENT_ID", "xxxxxxxxxxxxxxxxxxxx")
 
 # ─────────────────────────────
