@@ -52,11 +52,15 @@ def drive_upload(local_path: Union[str, Path], filename: str | None = None) -> s
     if filename is None:
         filename = local_path.name
 
-    # 1) HEIC / HEIF → JPEG   ← ★ここを修正
-    if local_path.suffix.lower() in (".heic", ".heif"):
+    # --- 変更後（中身を try/except で判定） ---------------
+    # 1) HEIF/HEIC を必ず JPEG に
+    try:
+        # pyheif で読めれば HEIF 系 → JPEG に変換
+        import pyheif
+        pyheif.read(local_path)            # 失敗したら ValueError
         local_path, filename = _convert_heic_to_jpg(local_path)
-    else:
-        # 2) そのほか画像も JPEG 化
+    except (ValueError, OSError):
+        # それ以外は必要なら JPEG へ
         local_path, filename = _ensure_jpeg(local_path)
 
     service = get_drive_service()
