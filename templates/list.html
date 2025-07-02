@@ -53,7 +53,6 @@
       <tbody>
         {% for e in expenses %}
           <tr>
-            {# 申請者セル（承認者 & 全員モード時のみ） #}
             {% if show_user_col %}
               <td>{{ e.user.username }}</td>
             {% endif %}
@@ -66,143 +65,83 @@
             <td>{{ e.memo or "" }}</td>
         
             <td>
-                {# ── 1) 新方式：Expense.receipts (最大5枚) ── #}
                 {% if e.receipts %}
                   {% for r in e.receipts %}
                     <a href="{{ r.file_path }}" target="_blank">📄{{ loop.index }}</a>
                     {% if not loop.last %}<br>{% endif %}
                   {% endfor %}
-                {% endif %}
-              
-                {# ── 2) 旧方式：Expense.file_path が残っている場合 ── #}
-                {% if e.file_path %}
+                {% elif e.file_path %}
                   {% if e.file_path.startswith('http') %}
                     <a href="{{ e.file_path }}" target="_blank">📄</a>
                   {% else %}
-                    <a href="{{ url_for('expenses.view_receipt',
-                                        filename=e.file_path.split('/')[-1]) }}"
-                       target="_blank">📄</a>
+                    <a href="{{ url_for('expenses.view_receipt', filename=e.file_path.split('/')[-1]) }}" target="_blank">📄</a>
                   {% endif %}
                 {% endif %}
-              </td>                            
+            </td>                            
         
             <td>
-              {# ステータス Badge（和訳付き） #}
-              {% set label = {
-                'pending':'承認待ち',
-                'approved':'承認済み',
-                'rejected':'却下済み',
-                'canceled':'取消済み'
-              }[e.status] %}
-              {% set badge_cls = {
-                'pending':'badge-pending',
-                'approved':'badge-approved',
-                'rejected':'badge-rejected',
-                'canceled':'badge-canceled'
-              }[e.status] %}
+              {% set label = {'pending':'承認待ち','approved':'承認済み','rejected':'却下済み','canceled':'取消済み'}[e.status] %}
+              {% set badge_cls = {'pending':'badge-pending','approved':'badge-approved','rejected':'badge-rejected','canceled':'badge-canceled'}[e.status] %}
               <span class="badge {{ badge_cls }}">{{ label }}</span>  
-              
-              {# carried_forward のアイコン（翌月へ振替済み） #}
-              {% if e.carried_forward %}
-                <span class="text-info ms-1" title="翌月振替済">🔄</span>
-              {% endif %}
+              {% if e.carried_forward %}<span class="text-info ms-1" title="翌月振替済">🔄</span>{% endif %}
         
-              {# ------------------------------------------------------------
-                 承認者(admin) の操作
-                 ------------------------------------------------------------ #}
               {% if current_user.role == 'admin' %}
-        
-                {# 承認／却下：どのステータスでも表示。現在と同じボタンは無効化 #}
-                <form method="post"
-                      action="{{ url_for('expenses.approve', eid=e.id) }}"
-                      class="d-inline">
-                  <button class="btn btn-sm btn-success
-                                 {% if e.status == 'approved' %}disabled{% endif %}">
-                    承認
-                  </button>
+                <form method="post" action="{{ url_for('expenses.approve', eid=e.id) }}" class="d-inline">
+                  <button class="btn btn-sm btn-success {% if e.status=='approved' %}disabled{% endif %}">承認</button>
                 </form>
-        
-                <form method="post"
-                      action="{{ url_for('expenses.reject', eid=e.id) }}"
-                      class="d-inline">
-                  <button class="btn btn-sm btn-danger
-                                 {% if e.status == 'rejected' %}disabled{% endif %}">
-                    却下
-                  </button>
+                <form method="post" action="{{ url_for('expenses.reject', eid=e.id) }}" class="d-inline">
+                  <button class="btn btn-sm btn-danger {% if e.status=='rejected' %}disabled{% endif %}">却下</button>
                 </form>
-        
-                {# 削除は常に可 #}
-                <form method="post"
-                      action="{{ url_for('expenses.delete_expense', eid=e.id) }}"
-                      class="d-inline"
-                      onsubmit="return confirm('本当に削除しますか？');">
+                <form method="post" action="{{ url_for('expenses.delete_expense', eid=e.id) }}" class="d-inline" onsubmit="return confirm('本当に削除しますか？');">
                   <button class="btn btn-sm btn-outline-secondary">削除</button>
                 </form>
-
                 {% if not e.carried_forward %}
-                <form method="post" action="{{ url_for('expenses.carry_forward', eid=e.id) }}"
-                      class="d-inline">
+                <form method="post" action="{{ url_for('expenses.carry_forward', eid=e.id) }}" class="d-inline">
                   <button class="btn btn-sm btn-outline-info">翌月へ</button>
                 </form>
-              {% else %}
-                <form method="post" action="{{ url_for('expenses.undo_carry', eid=e.id) }}"
-                      class="d-inline">
+                {% else %}
+                <form method="post" action="{{ url_for('expenses.undo_carry', eid=e.id) }}" class="d-inline">
                   <button class="btn btn-sm btn-outline-warning">前月へ戻す</button>
                 </form>
+                {% endif %}
+              {% elif current_user.id==e.user_id and e.status=='pending' %}
+                <form method="post" action="{{ url_for('expenses.delete_expense', eid=e.id) }}" class="d-inline" onsubmit="return confirm('本当に削除しますか？');">
+                  <button class="btn btn-sm btn-outline-secondary">取消</button>
+                </form>
               {% endif %}
-            
-            {% elif current_user.id == e.user_id and e.status == 'pending' %}
-            
-              {# 申請者: 自分の pending 行だけ取消可能 #}
-              <form method="post" action="{{ url_for('expenses.delete_expense', eid=e.id) }}"
-                    class="d-inline" onsubmit="return confirm('本当に削除しますか？');">
-                <button class="btn btn-sm btn-outline-secondary">取消</button>
-              </form>
-            
-            {% endif %}
             </td>
-            {% if current_user.role == 'admin' %}
+            {% if current_user.role=='admin' %}
             <td>
               {% if not e.final_checked %}
-                <form method="post"
-                      action="{{ url_for('expenses.final_check', eid=e.id) }}"
-                      class="d-inline">
+                <form method="post" action="{{ url_for('expenses.final_check', eid=e.id) }}" class="d-inline">
                   <button class="btn btn-sm btn-outline-primary">✔️ 済</button>
                 </form>
               {% else %}
-                <form method="post"
-                      action="{{ url_for('expenses.undo_final_check', eid=e.id) }}"
-                      class="d-inline">
+                <form method="post" action="{{ url_for('expenses.undo_final_check', eid=e.id) }}" class="d-inline">
                   <button class="btn btn-sm btn-outline-secondary">↩︎ 取消</button>
                 </form>
               {% endif %}
             </td>
-          {% endif %}
+            {% endif %}
           </tr>
         {% endfor %}
-        </tbody>                
+      </tbody>
         <tfoot>
             <tr>
-              <th colspan="{{ 5 if show_user_col else 4 }}" class="text-end">
-                合計 <small>(税込)</small>
-              </th>
-              <th class="text-end">{{ "{:,}".format(total) }}</th>
-              <th></th>
+              <th colspan="{{ 5 if show_user_col else 4 }}" class="text-end">合計 <small>(税込)</small></th>
+              <th class="text-end">{{ "{:,}".format(total) }}</th><th></th>
             </tr>
             <tr>
               <th colspan="{{ 5 if show_user_col else 4 }}" class="text-end">税抜額</th>
-              <th class="text-end">{{ "{:,}".format(net_total) }}</th>
-              <th></th>
+              <th class="text-end">{{ "{:,}".format(net_total) }}</th><th></th>
             </tr>
             <tr>
               <th colspan="{{ 5 if show_user_col else 4 }}" class="text-end">消費税額</th>
-              <th class="text-end">{{ "{:,}".format(tax_amount) }}</th>
-              <th></th>
+              <th class="text-end">{{ "{:,}".format(tax_amount) }}</th><th></th>
             </tr>
-          </tfoot>            
+        </tfoot>            
   </table>
 </div>
 <a href="{{ url_for('expenses.submit') }}" class="btn btn-primary">新規入力</a>
-<a href="{{ url_for('expenses.submit') }}"
-   class="fab-submit d-sm-none">＋</a>
+<a href="{{ url_for('expenses.submit') }}" class="fab-submit d-sm-none">＋</a>
 {% endblock %}
