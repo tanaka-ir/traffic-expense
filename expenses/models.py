@@ -25,6 +25,11 @@ class User(UserMixin, db.Model):
     def check_password(self, pw: str) -> bool:
         return check_password_hash(self.password_hash, pw)
 
+    @property
+    def is_admin(self) -> bool:
+        """role カラムが 'admin' の場合に True を返す."""
+        return self.role == 'admin'
+
     def __repr__(self):
         return f"<User {self.username} ({self.role})>"
 
