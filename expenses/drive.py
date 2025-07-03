@@ -19,6 +19,7 @@ from googleapiclient.http import MediaIoBaseUpload  # type: ignore
 from pillow_heif import register_heif_opener  # pip install pillow-heif
 from PIL import Image, UnidentifiedImageError
 
+
 # -------------------------- ロギング設定 -----------------------------------
 logger = logging.getLogger(__name__)
 if not logger.handlers:                          # 重複登録を防ぐ
@@ -31,7 +32,7 @@ logger.info("drive.py is imported")
 # ------------------------ 画像関連ユーティリティ ---------------------------
 register_heif_opener()  # HEIF/HEIC を Pillow が読めるように
 
-ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".heif", ".heic"}
+ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".heif", ".heic",".png"}
 
 
 def _convert_to_png(src: BinaryIO, original_name: str) -> Tuple[io.BytesIO, str]:
@@ -78,33 +79,27 @@ def drive_upload(
     """
     `local_path` のファイルを Google Drive にアップロードし共有リンクを返す。
     HEIC/HEIF は自動で PNG へ変換してから送る。
-
-    Parameters
-    ----------
-    local_path : Path          変換前後どちらでも良いローカルファイル
-    filename   : str           Drive 上でのファイル名（変換される場合は上書き）
-    folder_id  : str           アップロード先フォルダ ID
-    credentials_path : str     サービスアカウント JSON のパス
     """
     ext = Path(filename).suffix.lower()
     if ext not in ALLOWED_EXTS:
         raise ValueError(f"Unsupported extension: {ext}")
 
-    # ---------- 変換が必要なら PNG に ----------
-    fileobj: BinaryIO
+    # ── ここから変換ロジック ──
     if ext in {".heif", ".heic"}:
+        # ローカルに保存された HEIC/HEIF をバイトストリームに変換
         with local_path.open("rb") as raw:
             fileobj, filename = _convert_to_png(raw, filename)
+        mime_type = "image/png"
     else:
+        # それ以外は元ファイルをそのままストリームで
         fileobj = local_path.open("rb")
-
-    # ---------- MIME Type 推定 ----------
-    mime_type, _ = mimetypes.guess_type(filename)
-    mime_type = mime_type or "application/octet-stream"
+        mime_type, _ = mimetypes.guess_type(filename)
+        mime_type = mime_type or "application/octet-stream"
+    # ── ここまで変換ロジック ──
 
     media = MediaIoBaseUpload(fileobj, mimetype=mime_type, resumable=False)
 
-    # ---------- Drive へアップロード ----------
+    # 以下は既存のアップロード処理
     service = _get_service(credentials_path)
     meta = {
         "name": filename,
@@ -116,10 +111,12 @@ def drive_upload(
         .create(body=meta, media_body=media, fields="id, webViewLink")
         .execute()
     )
-
-    # anyone with the link → reader
-    service.permissions().create(fileId=uploaded["id"], body={"type": "anyone", "role": "reader"}).execute()
+    service.permissions().create(
+        fileId=uploaded["id"],
+        body={"type": "anyone", "role": "reader"}
+    ).execute()
 
     link: str = uploaded["webViewLink"]
     logger.info("Uploaded %s (id=%s) → %s", filename, uploaded["id"], link)
     return link
+
