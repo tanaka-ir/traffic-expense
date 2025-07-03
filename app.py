@@ -29,6 +29,7 @@ def create_app():
     app.config["MAX_CONTENT_LENGTH"] = int(
         os.getenv("MAX_CONTENT_LENGTH", app.config.get("MAX_CONTENT_LENGTH", 50 * 1024 * 1024))
     )
+    logger.info("MAX_CONTENT_LENGTH = %d bytes", app.config["MAX_CONTENT_LENGTH"])
 
     # ── 拡張を初期化 ────────────────────────
     db.init_app(app)
