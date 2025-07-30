@@ -1,34 +1,26 @@
-# routes.py 先頭推奨例
-import os        #テスト用で追加あとで消すかも
+
 from datetime import datetime, date
 from pathlib import Path
 import calendar
-from uuid import uuid4
 
 from flask import (
-    render_template, request, redirect, url_for, flash,
-    current_app, send_from_directory
+    render_template, request, redirect, url_for, flash, current_app, send_from_directory
 )
+from werkzeug.utils import secure_filename
+
+from . import bp
+from app import db
+from .models import Expense, ExpenseReceipt, User
 from flask_login import login_required, current_user
+from expenses.utils import admin_required
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func, case
+from uuid import uuid4
+from flask import current_app
 
-from expenses import bp
-from app import db
-from expenses.models import Expense, ExpenseReceipt, User
-from expenses.utils import admin_required, save_upload, UPLOAD_DIR
-from expenses.line_push import push_image_with_note, push_image
-
-from flask import current_app   # デバックログ用後から必ず消す
-
-# ─────────────────────────────
-# /submit
-# ─────────────────────────────
 @bp.route("/submit", methods=["GET", "POST"])
 @login_required
 def submit():
-    BASE_URL = os.getenv("BASE_URL", request.url_root.rstrip("/"))
-
     if request.method == "POST":
         dates        = request.form.getlist("date[]")
         departures   = request.form.getlist("departure[]")
@@ -62,48 +54,30 @@ def submit():
             db.session.flush()
             added_cnt += 1
 
-            # LINE 用の注記（最初の1枚にだけ添付）
-            try:
-                date_str = datetime.strptime(dt, "%Y-%m-%d").date().isoformat()
-            except ValueError:
-                date_str = dt
-            note = f"{date_str}  {dpt}→{dst}  ¥{int(amt):,}"
-            if memo:
-                note += f"\nメモ: {memo}"
-
-            # 領収書 1〜5 枚を保存 & LINE へ送信
-            files = [f for f in files_dict.get(idx, []) if f and getattr(f, "filename", "")][:5]
-            for j, f in enumerate(files):
+            for f in files_dict.get(idx, [])[:5]:
+                if not f or not f.filename:
+                    continue
                 ext = f.filename.rsplit(".", 1)[-1].lower()
                 if ext not in current_app.config["ALLOWED_EXTENSIONS"]:
                     flash(f"拡張子 {ext} は許可されていません", "warning")
                     continue
 
-                # ① サーバーに保存（uuid で一意化）
-                filename = save_upload(f)
+                filename   = secure_filename(f"{dt}_{idx}_{uuid4().hex[:6]}.{ext}")
+                upload_dir = Path(current_app.config["UPLOAD_FOLDER"])
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                save_to = upload_dir / filename
+                f.save(save_to)
 
-                # ② 公開 URL 作成（HTTPS の BASE_URL を使用）
-                image_url = f"{BASE_URL}/files/{filename}"
-                current_app.logger.info("image_url -> %s", image_url)
+                drive_link = drive_upload(
+                    save_to,
+                    filename,
+                    folder_id=current_app.config["GDRIVE_UPLOAD_FOLDER_ID"],
+                    credentials_path=current_app.config["GDRIVE_SERVICE_JSON"],
+                )
 
-                # ③ LINE へ送信（1枚目は送信者情報つき、2枚目以降は画像のみ）
-                try:
-                    if j == 0:
-                        push_image_with_note(
-                            image_url=image_url,
-                            user_name=current_user.username,
-                            role=current_user.role,
-                            note=note,
-                        )
-                    else:
-                        push_image(image_url)
-                except Exception as e:
-                    current_app.logger.exception("LINE送信に失敗: %s", e)
-
-                # ④ DB: file_path にファイル名を保存
                 receipt = ExpenseReceipt(
                     expense_id=expense.id,
-                    file_path=filename
+                    file_path=drive_link
                 )
                 db.session.add(receipt)
 
@@ -176,6 +150,12 @@ def list_expenses():
             current_user.role == "admin" and (user_param in [None, "", "all"])
         )
     )
+
+
+@bp.route("/receipts/<path:filename>")
+def view_receipt(filename):
+    receipts_dir = current_app.config["UPLOAD_FOLDER"]
+    return send_from_directory(str(receipts_dir), filename)
 
 
 @bp.route("/pending")
@@ -267,8 +247,3 @@ def undo_final_check(eid):
     db.session.commit()
     flash("最終確認を解除しました", "secondary")
     return redirect(url_for("expenses.list_expenses", **request.args))
-
-@bp.route("/files/<path:filename>")
-def view_receipt(filename):
-    """uploads/ 内の画像を公開 URL として返す"""
-    return send_from_directory(UPLOAD_DIR, filename)
