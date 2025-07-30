@@ -1,3 +1,6 @@
+import os
+from expenses.line_push import push_image_with_note, push_image
+from expenses.utils import save_upload
 
 from datetime import datetime, date
 from pathlib import Path
@@ -21,6 +24,9 @@ from flask import current_app
 @bp.route("/submit", methods=["GET", "POST"])
 @login_required
 def submit():
+    # 画像URLを組み立てるためのベース（.env の BASE_URL を優先）
+    BASE_URL = os.getenv("BASE_URL", request.url_root.rstrip("/"))
+
     if request.method == "POST":
         dates        = request.form.getlist("date[]")
         departures   = request.form.getlist("departure[]")
@@ -28,6 +34,8 @@ def submit():
         amounts      = request.form.getlist("amount[]")
         memos        = request.form.getlist("memo[]")
         transports   = request.form.getlist("transport[]")
+
+        # 各行（区間）ごとのファイル配列
         files_dict = {
             idx: request.files.getlist(f"receipt{idx}[]")
             for idx in range(len(departures))
@@ -37,9 +45,11 @@ def submit():
         for idx, (dpt, dst, dt, amt, memo, trn) in enumerate(
             zip(departures, destinations, dates, amounts, memos, transports)
         ):
+            # 必須チェック
             if not (dt and dpt and dst and amt):
                 continue
 
+            # 申請レコードを作成
             expense = Expense(
                 date=datetime.strptime(dt, "%Y-%m-%d").date(),
                 departure=dpt,
@@ -48,36 +58,54 @@ def submit():
                 transport=trn,
                 memo=memo or None,
                 status="pending",
-                user_id=current_user.id
+                user_id=current_user.id,
             )
             db.session.add(expense)
-            db.session.flush()
+            db.session.flush()  # expense.id を得る
             added_cnt += 1
 
-            for f in files_dict.get(idx, [])[:5]:
-                if not f or not f.filename:
-                    continue
+            # 1枚目に添える注記テキストを作成
+            try:
+                date_str = datetime.strptime(dt, "%Y-%m-%d").date().isoformat()
+            except ValueError:
+                date_str = dt
+            note = f"{date_str}  {dpt}→{dst}  ¥{int(amt):,}"
+            if memo:
+                note += f"\nメモ: {memo}"
+
+            # 領収書 1〜5 枚を保存 & LINE へ送信
+            files = [f for f in files_dict.get(idx, []) if f and getattr(f, "filename", "")][:5]
+            for j, f in enumerate(files):
                 ext = f.filename.rsplit(".", 1)[-1].lower()
                 if ext not in current_app.config["ALLOWED_EXTENSIONS"]:
                     flash(f"拡張子 {ext} は許可されていません", "warning")
                     continue
 
-                filename   = secure_filename(f"{dt}_{idx}_{uuid4().hex[:6]}.{ext}")
-                upload_dir = Path(current_app.config["UPLOAD_FOLDER"])
-                upload_dir.mkdir(parents=True, exist_ok=True)
-                save_to = upload_dir / filename
-                f.save(save_to)
+                # ① サーバーに保存（uuid で一意化）
+                filename = save_upload(f)
 
-                drive_link = drive_upload(
-                    save_to,
-                    filename,
-                    folder_id=current_app.config["GDRIVE_UPLOAD_FOLDER_ID"],
-                    credentials_path=current_app.config["GDRIVE_SERVICE_JSON"],
-                )
+                # ② 公開 URL 作成（必ず HTTPS の BASE_URL）
+                image_url = f"{BASE_URL}/files/{filename}"
+                current_app.logger.info("image_url -> %s", image_url)
 
+                # ③ LINE へ送信（1枚目は送信者情報＋注記、2枚目以降は画像のみ）
+                try:
+                    if j == 0:
+                        push_image_with_note(
+                            image_url=image_url,
+                            user_name=current_user.username,
+                            role=current_user.role,
+                            note=note,
+                        )
+                    else:
+                        push_image(image_url)
+                except Exception as e:
+                    current_app.logger.exception("LINE送信に失敗: %s", e)
+
+                # ④ DB: file_path にはローカル保存のファイル名を記録
                 receipt = ExpenseReceipt(
                     expense_id=expense.id,
-                    file_path=drive_link
+                    file_path=filename,
                 )
                 db.session.add(receipt)
 
@@ -89,6 +117,7 @@ def submit():
             flash("入力が空です。少なくとも 1 区間は必須項目を入力してください。", "warning")
 
     return render_template("submit.html")
+
 
 
 @bp.route("/list")
