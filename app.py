@@ -27,8 +27,9 @@ def create_app():
 
     # 2) .env の値で上書き（無ければ既存値を保持）
     app.config["MAX_CONTENT_LENGTH"] = int(
-        os.getenv("MAX_CONTENT_LENGTH", app.config.get("MAX_CONTENT_LENGTH", 5 * 1024 * 1024))
+        os.getenv("MAX_CONTENT_LENGTH", app.config.get("MAX_CONTENT_LENGTH", 50 * 1024 * 1024))
     )
+    app.logger.info("MAX_CONTENT_LENGTH = %d bytes", app.config["MAX_CONTENT_LENGTH"])
 
     # ── 拡張を初期化 ────────────────────────
     db.init_app(app)
