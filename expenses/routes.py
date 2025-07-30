@@ -2,6 +2,9 @@ import os
 from expenses.line_push import push_image_with_note, push_image
 from expenses.utils import save_upload, UPLOAD_DIR
 
+import time
+import requests
+
 from datetime import datetime, date
 from pathlib import Path
 import calendar
@@ -19,6 +22,28 @@ from expenses.utils import admin_required
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func, case
 from uuid import uuid4
+
+def ensure_url_ready(url: str, tries: int = 6, wait: float = 0.25) -> bool:
+    """
+    保存直後の公開URLが 200 を返すまで HEAD をリトライして確認する。
+    一部環境で HEAD が 405 の場合は GET にフォールバック。
+    """
+    for i in range(tries):
+        try:
+            r = requests.head(url, timeout=2, allow_redirects=True)
+            if r.status_code == 200:
+                return True
+            if r.status_code == 405:
+                # HEAD非対応なら軽いGETで事前ウォームアップ
+                g = requests.get(url, stream=True, timeout=4)
+                ok = (g.status_code == 200)
+                g.close()
+                if ok:
+                    return True
+        except Exception as e:
+            current_app.logger.debug("HEAD check failed (%s/%s): %s", i + 1, tries, e)
+        time.sleep(wait)
+    return False
 
 @bp.route("/submit", methods=["GET", "POST"])
 @login_required
@@ -85,7 +110,12 @@ def submit():
 
                 # ② 公開 URL 作成（必ず HTTPS の BASE_URL）
                 image_url = f"{BASE_URL}/files/{filename}"
-                current_app.logger.info("image_url -> %s", image_url)
+                current_app.logger.info("prepared image_url -> %s", image_url)
+
+                # ②.5 公開URLの準備ができているかHEADで確認（軽くリトライ）
+                if not ensure_url_ready(image_url):
+                    current_app.logger.warning("image_url not ready -> %s (skip push)", image_url)
+                    continue  # この画像の送信はスキップ（必要なら再送キュー化も検討）
 
                 # ③ LINE へ送信（1枚目は送信者情報＋注記、2枚目以降は画像のみ）
                 try:
@@ -99,7 +129,7 @@ def submit():
                     else:
                         push_image(image_url)
                 except Exception as e:
-                    current_app.logger.exception("LINE送信に失敗: %s", e)
+                    current_app.logger.exception("LINE送信に失敗: %s (url=%s)", e, image_url)
 
                 # ④ DB: file_path にはローカル保存のファイル名を記録
                 receipt = ExpenseReceipt(
