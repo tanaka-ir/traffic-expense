@@ -1,6 +1,6 @@
 import os
 from expenses.line_push import push_image_with_note, push_image
-from expenses.utils import save_upload, UPLOAD_DIR
+from expenses.utils import save_upload
 
 import time
 import requests
@@ -23,26 +23,55 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy import func, case
 from uuid import uuid4
 
-def ensure_url_ready(url: str, tries: int = 6, wait: float = 0.25) -> bool:
+def ensure_url_ready(url: str, tries: int = 10, wait: float = 0.25) -> bool:
     """
-    保存直後の公開URLが 200 を返すまで HEAD をリトライして確認する。
-    一部環境で HEAD が 405 の場合は GET にフォールバック。
+    公開URLが 200 を返すまで HEAD をリトライ。
+    可能なら内部URL(http://127.0.0.1:8000/files/...)で先に確認してから、
+    元の外部URLでも確認する。HEADが405なら軽いGETでフォールバック。
     """
+    # /files/<filename> が含まれていれば内部URLを組み立てる
+    internal_url = None
+    try:
+        fname = url.rsplit("/files/", 1)[1]
+        internal_url = f"http://127.0.0.1:8000/files/{fname}"
+    except Exception:
+        pass
+
+    last_err = None
     for i in range(tries):
-        try:
-            r = requests.head(url, timeout=2, allow_redirects=True)
-            if r.status_code == 200:
-                return True
-            if r.status_code == 405:
-                # HEAD非対応なら軽いGETで事前ウォームアップ
-                g = requests.get(url, stream=True, timeout=4)
-                ok = (g.status_code == 200)
-                g.close()
-                if ok:
+        # 1) 内部URL優先（証明書やDNSを挟まないため安定）
+        if internal_url:
+            try:
+                r = requests.head(internal_url, timeout=2, allow_redirects=True)
+                if r.status_code == 200:
                     return True
-        except Exception as e:
-            current_app.logger.debug("HEAD check failed (%s/%s): %s", i + 1, tries, e)
-        time.sleep(wait)
+                if r.status_code == 405:
+                    g = requests.get(internal_url, stream=True, timeout=4)
+                    ok = (g.status_code == 200)
+                    g.close()
+                    if ok:
+                        return True
+            except Exception as e:
+                last_err = e
+
+        # 2) 外部URL（=呼び出し元で渡ってきたURL）
+        try:
+            r2 = requests.head(url, timeout=3, allow_redirects=True)
+            if r2.status_code == 200:
+                return True
+            if r2.status_code == 405:
+                g2 = requests.get(url, stream=True, timeout=4)
+                ok2 = (g2.status_code == 200)
+                g2.close()
+                if ok2:
+                    return True
+        except Exception as e2:
+            last_err = e2
+
+        # 逓増スリープ（0.25, 0.5, 0.75, ... 秒）
+        time.sleep(wait * (i + 1))
+
+    current_app.logger.warning("ensure_url_ready timeout for %s (last_err=%s)", url, last_err)
     return False
 
 @bp.route("/submit", methods=["GET", "POST"])
@@ -213,7 +242,8 @@ def list_expenses():
 @bp.route("/files/<path:filename>", methods=["GET", "HEAD"])
 def view_receipt(filename):
     # 認証不要（LINEが直接取りに来るため）
-    return send_from_directory(str(UPLOAD_DIR), filename, as_attachment=False, max_age=3600)
+    receipts_dir = current_app.config["UPLOAD_FOLDER"]  # 例: "instance/receipts"
+    return send_from_directory(str(receipts_dir), filename, as_attachment=False, max_age=3600)
 
 
 @bp.route("/pending")
