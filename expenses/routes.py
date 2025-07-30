@@ -1,6 +1,6 @@
 import os
 from expenses.line_push import push_image_with_note, push_image
-from expenses.utils import save_upload
+from expenses.utils import save_upload, UPLOAD_DIR
 
 from datetime import datetime, date
 from pathlib import Path
@@ -19,7 +19,6 @@ from expenses.utils import admin_required
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func, case
 from uuid import uuid4
-from flask import current_app
 
 @bp.route("/submit", methods=["GET", "POST"])
 @login_required
@@ -181,10 +180,10 @@ def list_expenses():
     )
 
 
-@bp.route("/receipts/<path:filename>")
+@bp.route("/files/<path:filename>", methods=["GET", "HEAD"])
 def view_receipt(filename):
-    receipts_dir = current_app.config["UPLOAD_FOLDER"]
-    return send_from_directory(str(receipts_dir), filename)
+    # 認証不要（LINEが直接取りに来るため）
+    return send_from_directory(str(UPLOAD_DIR), filename, as_attachment=False, max_age=3600)
 
 
 @bp.route("/pending")
