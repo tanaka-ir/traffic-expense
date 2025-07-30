@@ -16,3 +16,7 @@ venv/
 .DS_Store
 instance/receipts/
 safe_files/
+.env
+instance/service_account.json
+uploads/
+instance/*.db
