@@ -17,5 +17,12 @@ class Config:
 
     # --- 画像アップロード設定 ---
     UPLOAD_FOLDER = Path(os.getenv("UPLOAD_FOLDER", "instance/receipts"))
-    ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "pdf"}  # 必要に応じて追加
-    MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5 MB/ファイル上限
+
+    # .env に指定があればそれを優先（なければデフォルトに heic/heif/webp を含める）
+    _raw_ext = os.getenv("ALLOWED_EXTENSIONS", "png,jpg,jpeg,pdf,heic,heif,webp")
+    ALLOWED_EXTENSIONS = {
+        x.strip().lower() for x in _raw_ext.split(",") if x.strip()
+    }
+
+    # リクエスト全体の上限（バイト）。環境変数が無ければ 50MB を既定にする
+    MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", 50 * 1024 * 1024))
