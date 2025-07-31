@@ -27,12 +27,17 @@ def create_app():
     load_dotenv()                 # ← ここだけに統一
 
     app = Flask(__name__, instance_relative_config=True)
-    
-    import logging
+
+    import sys, logging
+    h = logging.StreamHandler(sys.stderr)  # Gunicornが拾う出力先
+    h.setLevel(logging.INFO)
+    app.logger.addHandler(h)
     app.logger.setLevel(logging.INFO)
+    app.logger.propagate = False  # 重複出力を防止
 
     # 1) Config クラスを読み込む
     app.config.from_object(Config)
+
 
     # 2) .env の値で上書き（無ければ既存値を保持）
     app.config["MAX_CONTENT_LENGTH"] = int(
