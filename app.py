@@ -27,6 +27,9 @@ def create_app():
     load_dotenv()                 # ← ここだけに統一
 
     app = Flask(__name__, instance_relative_config=True)
+    
+    import logging
+    app.logger.setLevel(logging.INFO)
 
     # 1) Config クラスを読み込む
     app.config.from_object(Config)
