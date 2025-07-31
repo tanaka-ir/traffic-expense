@@ -92,6 +92,21 @@ def submit():
         memos        = request.form.getlist("memo[]")
         transports   = request.form.getlist("transport[]")
 
+
+        #--96行目から107行目までは仮で入れている--
+        current_app.logger.info(
+            "UPLOAD req content_type=%s content_length=%s",
+            request.content_type, request.content_length
+        )
+        # 受信したファイルキー一覧（何というnameで届いたか）
+        current_app.logger.info("UPLOAD files.keys=%s", list(request.files.keys()))
+
+        # 各行 index ごとの受信数（サーバが探しているキー名で何件あるか）
+        for i in range(len(departures)):
+            current_app.logger.info("UPLOAD files[receipt%d[]] count=%s",
+                                    i, len(request.files.getlist(f"receipt{i}[]")))
+        #--ここまであとで消す--
+
         # 各行（区間）ごとのファイル配列
         files_dict = {
             idx: request.files.getlist(f"receipt{idx}[]")
