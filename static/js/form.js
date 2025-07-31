@@ -5,10 +5,14 @@ document.addEventListener("DOMContentLoaded", () => {
   
     // 行追加ボタン
     add.addEventListener("click", () => {
-        const idx   = rows.querySelectorAll('input[type="file"][name^="receipt"]').length;
-        const clone = tpl.innerHTML.replace(/__IDX__/g, idx);
-        rows.insertAdjacentHTML("beforeend", clone);
-      });      
+      const names = new Set(
+        Array.from(rows.querySelectorAll('input[type="file"][name^="receipt"]'))
+             .map(el => el.name)   // 例: "receipt0[]", "receipt1[]", ...
+      );
+      const idx   = names.size;     // 既存の一意な行数 = 次の idx
+      const clone = tpl.innerHTML.replace(/__IDX__/g, idx);
+      rows.insertAdjacentHTML("beforeend", clone);
+    });      
   
     // ★ ファイル選択時にラベル更新（行追加後も効くよう委譲）
     document.addEventListener("change", (ev) => {
