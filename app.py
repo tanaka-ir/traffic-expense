@@ -10,6 +10,12 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 import sqlite3
 
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except Exception as e:
+    print("pillow-heif registration failed:", e)
+
 db = SQLAlchemy()
 migrate = Migrate()
 
