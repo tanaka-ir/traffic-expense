@@ -7,6 +7,7 @@ import requests
 
 from datetime import datetime, date
 from pathlib import Path
+from .image_utils import normalize_to_jpeg
 import calendar
 
 from flask import (
@@ -81,6 +82,9 @@ def submit():
     BASE_URL = os.getenv("BASE_URL", request.url_root.rstrip("/"))
 
     if request.method == "POST":
+        ua = request.headers.get("User-Agent", "-")
+        cl = request.headers.get("Content-Length", "-")
+        current_app.logger.info(f"upload_start ua={ua} content_length={cl}")
         dates        = request.form.getlist("date[]")
         departures   = request.form.getlist("departure[]")
         destinations = request.form.getlist("destination[]")
@@ -136,6 +140,50 @@ def submit():
 
                 # ① サーバーに保存（uuid で一意化）
                 filename = save_upload(f)
+
+                # === ここから追加：保存直後ログ＆正規化（PDF は除外） ===
+                # 物理パスを解決（UPLOAD_FOLDER が相対なら app.root_path を基準に解決）
+                try:
+                    up = current_app.config["UPLOAD_FOLDER"]
+                    upload_dir = Path(up) if Path(up).is_absolute() else Path(current_app.root_path) / up
+                    save_path = (upload_dir / filename).resolve()
+                except Exception as e:
+                    current_app.logger.exception(f"upload_dir_resolve_failed filename={filename} err={e}")
+                    continue  # ディレクトリ特定に失敗したらこのファイルはスキップ
+
+                # 保存直後のログ
+                try:
+                    current_app.logger.info(f"upload_saved path={save_path} size={save_path.stat().st_size}B ext={ext}")
+                except Exception:
+                    current_app.logger.info(f"upload_saved path={save_path} ext={ext}")
+
+                # 画像なら JPEG 正規化（HEIC/HEIF/WEBP/PNG/JPEG → JPEG）
+                if ext != "pdf":
+                    try:
+                        new_path = normalize_to_jpeg(save_path, long_edge=2000, quality=85)
+
+                        # 変換でファイル名が変わる場合があるため差し替え
+                        if new_path != save_path:
+                            # 元ファイルが .jpg 以外なら掃除（失敗は警告止まり）
+                            try:
+                                if save_path.exists() and save_path.suffix.lower() != ".jpg":
+                                    save_path.unlink(missing_ok=True)
+                            except Exception as ce:
+                                current_app.logger.warning(f"cleanup_failed path={save_path} err={ce}")
+
+                            save_path = new_path
+                            filename = new_path.name   # ← この後の URL/DB はこの新ファイル名を使う
+                            ext = "jpg"
+
+                        # 正規化後のログ
+                        try:
+                            current_app.logger.info(f"upload_normalized path={save_path} size={save_path.stat().st_size}B")
+                        except Exception:
+                            current_app.logger.info(f"upload_normalized path={save_path}")
+                    except Exception as ne:
+                        # 正規化失敗は致命にしない（原本のまま続行）
+                        current_app.logger.exception(f"normalize_failed path={save_path} err={ne}")
+                # === 追加ここまで ===
 
                 # ② 公開 URL 作成（必ず HTTPS の BASE_URL）
                 image_url = f"{BASE_URL}/files/{filename}"
