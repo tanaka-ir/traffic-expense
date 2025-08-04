@@ -26,6 +26,8 @@ def create_app():
     # ── .env を読み込み ─────────────────────
     load_dotenv()                 # ← ここだけに統一
 
+    import logging, sys
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr, force=True)
     app = Flask(__name__, instance_relative_config=True)
 
     import sys, logging
