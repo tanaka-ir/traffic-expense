@@ -158,15 +158,35 @@ def submit():
             push_text(header)          # ← ★ テキストのみ 1 通目
 
             # 領収書 1〜5 枚を保存 & LINE へ送信
-            files = [f for f in files_dict.get(idx, []) if f and getattr(f, "filename", "")][:5]
+            # 空 filename (iOS カメラなど) も受け取る
+            files = [f for f in files_dict.get(idx, []) if f][:5]
             for f in files:
-                ext = f.filename.rsplit(".", 1)[-1].lower()
+                # ── 拡張子を決定 ───────────────────────
+                if f.filename:
+                    ext = f.filename.rsplit(".", 1)[-1].lower()
+                else:
+                    # filename が空なら mimetype から推定
+                    mime_map = {
+                        "image/heic": "heic",
+                        "image/heif": "heif",
+                        "image/jpeg": "jpg",
+                        "image/png":  "png",
+                        "application/pdf": "pdf",
+                    }
+                    ext = mime_map.get(f.mimetype, "jpg")   # デフォルト jpg
                 if ext not in current_app.config["ALLOWED_EXTENSIONS"]:
                     flash(f"拡張子 {ext} は許可されていません", "warning")
                     continue
 
                 # ① サーバーに保存（uuid で一意化）
-                filename = save_upload(f)
+                if f.filename:
+                    filename = save_upload(f)        # save_upload は uuid 付与ラッパ
+                else:
+                    # 空 filename 対応: uuid.ext を直接生成して保存
+                    from uuid import uuid4
+                    unique_name = f"{uuid4().hex}.{ext}"
+                    f.save(Path(current_app.config["UPLOAD_FOLDER"]) / unique_name)
+                    filename = unique_name
 
                 # === ここから追加：保存直後ログ＆正規化（PDF は除外） ===
                 # 物理パスを解決（UPLOAD_FOLDER が相対なら app.root_path を基準に解決）
