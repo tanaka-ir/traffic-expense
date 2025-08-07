@@ -161,6 +161,11 @@ def submit():
             # 空 filename (iOS カメラなど) も受け取る
             files = [f for f in files_dict.get(idx, []) if f][:5]
             for f in files:
+                current_app.logger.info(
+                    "DEBUG loop in: idx=%s filename=%r mimetype=%s",
+                    idx, f.filename, f.mimetype
+                )
+
                 # ── 拡張子を決定 ───────────────────────
                 if f.filename:
                      # ── 拡張子を決定 ─────────────────────
