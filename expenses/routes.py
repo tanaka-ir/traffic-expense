@@ -160,6 +160,8 @@ def submit():
             # 領収書 1〜5 枚を保存 & LINE へ送信
             # 空 filename (iOS カメラなど) も受け取る
             files = files_dict.get(idx, [])[:5]   # ← フィルタを外して全部通す
+            # ★ 追加：ここで件数を出力
+            current_app.logger.info("DEBUG files length=%s idx=%s", len(files), idx)
             for f in files:
                 current_app.logger.info(
                     "DEBUG loop in: idx=%s filename=%r mimetype=%s",
