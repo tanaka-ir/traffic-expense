@@ -122,6 +122,11 @@ def submit():
         for idx, (dpt, dst, dt, amt, memo, trn) in enumerate(
             zip(departures, destinations, dates, amounts, memos, transports)
         ):
+            # ── ★ 追加：必須チェックの直前で値を確認 ──
+            current_app.logger.info(
+                "DEBUG row idx=%s dt=%r dpt=%r dst=%r amt=%r",
+                idx, dt, dpt, dst, amt
+            )
             # 必須チェック
             if not (dt and dpt and dst and amt):
                 continue
