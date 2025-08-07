@@ -106,6 +106,11 @@ def submit():
             current_app.logger.info("UPLOAD files[receipt%d[]] count=%s",
                                     i, len(request.files.getlist(f"receipt{i}[]")))
         #--ここまであとで消す--
+        
+        # 受信ファイル名をそのまま確認
+        for key, f in request.files.items():
+            current_app.logger.info("UPLOAD raw key=%s filename=%r", key, f.filename)
+
 
         # 各行（区間）ごとのファイル配列
         files_dict = {
