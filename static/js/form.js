@@ -47,5 +47,29 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
     });
+    /* ───────── ここから追加：必須4項目のバリデーション ───────── */
+    document.querySelector("form").addEventListener("submit", ev => {
+      const rowsEls = document.querySelectorAll(
+        "#rows tr.d-none.d-md-table-row, #rows tr.d-table-row.d-md-none"
+      );
+
+      for (const row of rowsEls) {
+        const date = row.querySelector('input[name="date[]"]')?.value.trim();
+        const dpt  = row.querySelector('input[name="departure[]"]')?.value.trim();
+        const dst  = row.querySelector('input[name="destination[]"]')?.value.trim();
+        const amt  = row.querySelector('input[name="amount[]"]')?.value.trim();
+
+        // 完全に空行なら無視
+        if (!date && !dpt && !dst && !amt) continue;
+
+        // どれか欠けていれば送信を中断
+        if (!date || !dpt || !dst || !amt) {
+          ev.preventDefault();
+          alert("入力が不足している行があります。\n日付・出発・到着・金額をすべて入力してください。");
+          return;
+        }
+      }
+    });
+    /* ───────── 追加ここまで ───────── */
   });
   
