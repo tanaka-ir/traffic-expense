@@ -159,7 +159,7 @@ def submit():
 
             # 領収書 1〜5 枚を保存 & LINE へ送信
             # 空 filename (iOS カメラなど) も受け取る
-            files = [f for f in files_dict.get(idx, []) if f][:5]
+            files = [f for f in files_dict.get(idx, []) if f is not None][:5]
             for f in files:
                 current_app.logger.info(
                     "DEBUG loop in: idx=%s filename=%r mimetype=%s",
