@@ -1,5 +1,5 @@
 import os
-from expenses.line_push import push_image_with_note, push_image
+from expenses.line_push import push_text, push_image
 from expenses.utils import save_upload
 
 import time
@@ -141,13 +141,20 @@ def submit():
                 date_str = datetime.strptime(dt, "%Y-%m-%d").date().isoformat()
             except ValueError:
                 date_str = dt
+            # ── まずテキストだけ送信 ──────────────────────────
             note = f"{date_str}  {dpt}→{dst}  ¥{int(amt):,}"
             if memo:
                 note += f"\nメモ: {memo}"
 
+            header = (
+                f"{current_user.username}（{'管理者' if current_user.role == 'admin' else 'ユーザー'}）からの申請です。\n"
+                f"{note}\n↓↓↓↓"
+            )
+            push_text(header)          # ← ★ テキストのみ 1 通目
+
             # 領収書 1〜5 枚を保存 & LINE へ送信
             files = [f for f in files_dict.get(idx, []) if f and getattr(f, "filename", "")][:5]
-            for j, f in enumerate(files):
+            for f in files:
                 ext = f.filename.rsplit(".", 1)[-1].lower()
                 if ext not in current_app.config["ALLOWED_EXTENSIONS"]:
                     flash(f"拡張子 {ext} は許可されていません", "warning")
@@ -209,17 +216,9 @@ def submit():
                     current_app.logger.warning("image_url not ready -> %s (skip push)", image_url)
                     continue  # この画像の送信はスキップ（必要なら再送キュー化も検討）
 
-                # ③ LINE へ送信（1枚目は送信者情報＋注記、2枚目以降は画像のみ）
+                # ③ LINE へ送信（画像のみ）
                 try:
-                    if j == 0:
-                        push_image_with_note(
-                            image_url=image_url,
-                            user_name=current_user.username,
-                            role=current_user.role,
-                            note=note,
-                        )
-                    else:
-                        push_image(image_url)
+                    push_image(image_url)          # ← 常に画像だけ送る
                 except Exception as e:
                     current_app.logger.exception("LINE送信に失敗: %s (url=%s)", e, image_url)
 
