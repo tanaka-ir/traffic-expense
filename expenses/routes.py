@@ -151,23 +151,25 @@ def submit():
                 date_str = datetime.strptime(dt, "%Y-%m-%d").date().isoformat()
             except ValueError:
                 date_str = dt
-            # ── まずテキストだけ送信 ──────────────────────────
+            # ── テキスト本体 ──────────────────────────
             note = f"{date_str}  {dpt}→{dst}  ¥{int(amt):,}"
             if memo:
                 note += f"\nメモ: {memo}"
-
-            header = (
-                f"{current_user.username}（{'管理者' if current_user.role == 'admin' else 'ユーザー'}）からの申請です。\n"
-                f"{note}\n↓↓↓↓"
-            )
-            push_text(header)          # ← ★ テキストのみ 1 通目
 
             # ─────────────────────────────────────────────
             # 領収書 1〜5 枚を保存 & LINE へ送信
             # ─────────────────────────────────────────────
             files = files_dict.get(idx, [])[:5]          # ★ 空 filename も通す
-
+            has_files = any(files)
             current_app.logger.info("DEBUG files length=%s idx=%s", len(files), idx)
+
+            # ――― ヘッダー組み立て：画像があるときだけ矢印追加 ―――
+            header = (
+                f"{current_user.username}（{'管理者' if current_user.role == 'admin' else 'ユーザー'}）からの申請です。\n"
+                f"{note}" + ("\n↓↓↓↓" if has_files else "")
+            )
+
+            push_text(header)      # まずテキスト送信
 
             for f in files:
                 # filename が空（iOS など）ならここで生成

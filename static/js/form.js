@@ -53,12 +53,6 @@ document.addEventListener("DOMContentLoaded", () => {
         tr.remove();
         continue;
       }
-      // 入力あるのにファイルなし → エラー
-      if (anyInput && !hasFile) {
-        ev.preventDefault();
-        alert("画像が添付されていない行があります。領収書画像を選択してください。");
-        return;
-      }
       // 必須欠落 → エラー
       if (!date || !dpt || !dst || !amt) {
         ev.preventDefault();
