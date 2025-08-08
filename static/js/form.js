@@ -5,7 +5,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /* 行追加ボタン */
   add.addEventListener("click", () => {
-    const idx   = rows.querySelectorAll('input[type="file"][name^="receipt"]').length;
+    /* 既に存在する file input の “name” を集合で数える */
+    const names = new Set(
+      Array.from(
+        rows.querySelectorAll('input[type="file"][name^="receipt"]')
+      ).map(el => el.name)          // 例: "receipt0[]", "receipt1[]"
+    );
+    const idx = names.size;         // 0,1,2,… と連番になる
     const html  = tpl.innerHTML.replace(/__IDX__/g, idx);
     rows.insertAdjacentHTML("beforeend", html);
   });
