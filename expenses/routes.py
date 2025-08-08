@@ -159,19 +159,20 @@ def submit():
             # ─────────────────────────────────────────────
             # 領収書 1〜5 枚を保存 & LINE へ送信
             # ─────────────────────────────────────────────
-            files = files_dict.get(idx, [])[:5]          # ★ 空 filename も通す
-            has_files = any(files)
-            current_app.logger.info("DEBUG files length=%s idx=%s", len(files), idx)
+            files_raw   = files_dict.get(idx, [])[:5]               # 受信したまま（最大 5 枚）
+            valid_files = [f for f in files_raw if f and f.filename]  # ★ 空 filename を除外
+            has_files   = bool(valid_files)
 
-            # ――― ヘッダー組み立て：画像があるときだけ矢印追加 ―――
+            current_app.logger.info("DEBUG valid_files=%s idx=%s", len(valid_files), idx)
+
+            # ① まずテキスト（画像がある行だけ矢印を付ける）
             header = (
                 f"{current_user.username}（{'管理者' if current_user.role == 'admin' else 'ユーザー'}）からの申請です。\n"
                 f"{note}" + ("\n↓↓↓↓" if has_files else "")
             )
+            push_text(header)
 
-            push_text(header)      # まずテキスト送信
-
-            for f in files:
+            for f in valid_files:
                 # filename が空（iOS など）ならここで生成
                 if not f.filename:
                     mime_map = {
