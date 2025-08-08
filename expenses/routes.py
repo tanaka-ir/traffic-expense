@@ -151,52 +151,50 @@ def submit():
                 date_str = datetime.strptime(dt, "%Y-%m-%d").date().isoformat()
             except ValueError:
                 date_str = dt
-            # ── まずテキストだけ送信 ──────────────────────────
+            # ── テキスト本体 ──────────────────────────
             note = f"{date_str}  {dpt}→{dst}  ¥{int(amt):,}"
             if memo:
                 note += f"\nメモ: {memo}"
 
+            # ─────────────────────────────────────────────
+            # 領収書 1〜5 枚を保存 & LINE へ送信
+            # ─────────────────────────────────────────────
+            files = files_dict.get(idx, [])[:5]          # ★ 空 filename も通す
+            has_files = any(files)
+            current_app.logger.info("DEBUG files length=%s idx=%s", len(files), idx)
+
+            # ――― ヘッダー組み立て：画像があるときだけ矢印追加 ―――
             header = (
                 f"{current_user.username}（{'管理者' if current_user.role == 'admin' else 'ユーザー'}）からの申請です。\n"
-                f"{note}\n↓↓↓↓"
+                f"{note}" + ("\n↓↓↓↓" if has_files else "")
             )
-            push_text(header)          # ← ★ テキストのみ 1 通目
 
-            # 領収書 1〜5 枚を保存 & LINE へ送信
-            # 空 filename (iOS カメラなど) も受け取る
-            files = [f for f in files_dict.get(idx, []) if f and f.filename][:5]
-            # ★ 追加：ここで件数を出力
-            current_app.logger.info("DEBUG files length=%s idx=%s", len(files), idx)
+            push_text(header)      # まずテキスト送信
+
             for f in files:
+                # filename が空（iOS など）ならここで生成
+                if not f.filename:
+                    mime_map = {
+                        "image/heic":  "heic",
+                        "image/heif":  "heif",
+                        "image/heif-sequence": "heif",
+                        "image/heic-sequence": "heic",
+                        "image/webp": "webp",
+                        "image/png":  "png",
+                        "image/jpeg": "jpg",
+                        "application/pdf": "pdf",
+                    }
+                    ext = mime_map.get(f.mimetype, "jpg")
+                    from uuid import uuid4
+                    f.filename = f"{uuid4().hex}.{ext}"
+                else:
+                    ext = f.filename.rsplit(".", 1)[-1].lower()
+
                 current_app.logger.info(
                     "DEBUG loop in: idx=%s filename=%r mimetype=%s",
                     idx, f.filename, f.mimetype
                 )
 
-                # ── 拡張子を決定 ───────────────────────
-                if f.filename:
-                     # ── 拡張子を決定 ─────────────────────
-                     if f.filename:
-                         ext = f.filename.rsplit(".", 1)[-1].lower()
-                     else:
-                         mime_map = {
-                             "image/heic": "heic",
-                             "image/heif": "heif",
-                             "image/jpeg": "jpg",
-                             "image/png":  "png",
-                             "application/pdf": "pdf",
-                         }
-                         ext = mime_map.get(f.mimetype, "jpg")   # 取得失敗時は jpg 扱い
-                else:
-                    # filename が空なら mimetype から推定
-                    mime_map = {
-                        "image/heic": "heic",
-                        "image/heif": "heif",
-                        "image/jpeg": "jpg",
-                        "image/png":  "png",
-                        "application/pdf": "pdf",
-                    }
-                    ext = mime_map.get(f.mimetype, "jpg")   # デフォルト jpg
                 if ext not in current_app.config["ALLOWED_EXTENSIONS"]:
                     flash(f"拡張子 {ext} は許可されていません", "warning")
                     continue
